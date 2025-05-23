@@ -85,9 +85,9 @@ const SharedArrayBufferTest: React.FC = () => {
     return (
       <button
         onClick={() => setIsVisible(true)}
-        className="mb-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+        className="mb-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-bold"
       >
-        🧪 Run SharedArrayBuffer Diagnostics
+        🧪 DEBUG: Run SharedArrayBuffer Diagnostics
       </button>
     );
   }
@@ -95,7 +95,7 @@ const SharedArrayBufferTest: React.FC = () => {
   return (
     <div className="mb-6 p-4 bg-gray-900 border border-gray-700 rounded-lg">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-white">🧪 SharedArrayBuffer Diagnostics</h3>
+        <h3 className="text-lg font-semibold text-white">🧪 SharedArrayBuffer Diagnostics v2</h3>
         <button
           onClick={() => setIsVisible(false)}
           className="text-gray-400 hover:text-white"
