@@ -3,10 +3,12 @@ import { useEffect } from 'react';
 const AdSenseScript: React.FC = () => {
   useEffect(() => {
     const clientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
+    const adsenseEnabled = import.meta.env.VITE_ADSENSE_ENABLED === 'true';
     const isDevelopment = import.meta.env.DEV;
     
-    // Don't load AdSense script in development
-    if (!clientId || isDevelopment) {
+    // Don't load AdSense script in development or if not configured
+    if (!clientId || !adsenseEnabled || isDevelopment) {
+      console.log('AdSense disabled:', { isDevelopment, clientId: !!clientId, adsenseEnabled });
       return;
     }
 
@@ -24,6 +26,10 @@ const AdSenseScript: React.FC = () => {
     
     script.onerror = () => {
       console.error('Failed to load AdSense script');
+    };
+
+    script.onload = () => {
+      console.log('AdSense script loaded successfully');
     };
 
     document.head.appendChild(script);

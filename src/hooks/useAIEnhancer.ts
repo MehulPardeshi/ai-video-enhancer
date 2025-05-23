@@ -1,10 +1,8 @@
 import { useState, useCallback } from 'react';
 
-// Production-ready AI enhancement using Replicate API
-// Note: CORS errors are expected in development (localhost)
-// This will work perfectly in production with a real domain
-const REPLICATE_API_URL = 'https://api.replicate.com/v1/predictions';
-const REPLICATE_MODEL = 'xinntao/realesrgan';
+// Production-ready AI enhancement using Replicate API through Vercel functions
+// This fixes CORS issues by using our own API routes
+const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:5173' : '';
 
 export function useAIEnhancer() {
   const [model, setModel] = useState<boolean>(false);
@@ -19,50 +17,20 @@ export function useAIEnhancer() {
       setIsLoading(true);
       setError(null);
       
-      // In development, skip the API check due to CORS
-      const isDevelopment = import.meta.env.DEV;
+      console.log('🚀 Initializing AI Model...');
       
-      if (isDevelopment) {
-        console.log('🚀 Development Mode: Skipping API check (CORS blocked)');
-        console.log('✅ In production, this will connect to Replicate API');
-        
-        // Simulate loading progress for development UX
-        for (let i = 0; i <= 100; i += 25) {
-          setDownloadProgress(i);
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
-        
-        setModel(true);
-        setDownloadProgress(100);
-        console.log('✅ AI Model ready (development mode)');
-      } else {
-        // Production: Check if Replicate API is accessible
-        const response = await fetch('https://api.replicate.com/v1/models/xinntao/realesrgan', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Token ${import.meta.env.VITE_REPLICATE_API_TOKEN}`,
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-        
-        // Simulate loading progress for UX
-        for (let i = 0; i <= 100; i += 20) {
-          setDownloadProgress(i);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        setModel(true);
-        setDownloadProgress(100);
-        console.log('✅ AI Model ready (production mode)');
+      // Simulate loading progress for development UX
+      for (let i = 0; i <= 100; i += 25) {
+        setDownloadProgress(i);
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
+      
+      setModel(true);
+      setDownloadProgress(100);
+      console.log('✅ AI Model ready for enhancement');
     } catch (err) {
-      console.warn('🔄 API check failed, but model will work in production:', err);
-      // Even if API check fails, proceed with model initialization
-      // This ensures the app works even with network issues
+      console.warn('🔄 Model initialization error:', err);
+      // Even if initialization fails, proceed with model
       setModel(true);
       setDownloadProgress(100);
     } finally {
@@ -92,46 +60,35 @@ export function useAIEnhancer() {
       
       const base64Image = canvas.toDataURL('image/png');
       
-      // Get API key from environment
-      const apiKey = import.meta.env.VITE_REPLICATE_API_TOKEN;
-      
-      if (!apiKey) {
-        throw new Error('VITE_REPLICATE_API_TOKEN not found in environment variables');
-      }
-      
-      // Start prediction
-      const prediction = await fetch(REPLICATE_API_URL, {
+      // Start prediction using our API route
+      const response = await fetch(`${API_BASE_URL}/api/enhance`, {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa', // Real-ESRGAN v1.3
-          input: {
-            image: base64Image,
-            scale: scale,
-            face_enhance: false
-          }
+          image: base64Image,
+          scale: scale
         })
       });
 
-      if (!prediction.ok) {
-        throw new Error(`API request failed: ${prediction.status} ${prediction.statusText}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API request failed: ${response.status}`);
       }
 
-      const predictionData = await prediction.json();
+      const predictionData = await response.json();
       
-      // Poll for completion
+      // Poll for completion using our status API
       let result = predictionData;
       while (result.status === 'starting' || result.status === 'processing') {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        const statusResponse = await fetch(`${REPLICATE_API_URL}/${result.id}`, {
-          headers: {
-            'Authorization': `Token ${apiKey}`,
-          },
-        });
+        const statusResponse = await fetch(`${API_BASE_URL}/api/status?id=${result.id}`);
+        
+        if (!statusResponse.ok) {
+          throw new Error('Failed to check status');
+        }
         
         result = await statusResponse.json();
       }

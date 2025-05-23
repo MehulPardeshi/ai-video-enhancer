@@ -32,15 +32,21 @@ const AdUnit: React.FC<AdUnitProps> = ({
   }, []);
 
   const clientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
+  const adsenseEnabled = import.meta.env.VITE_ADSENSE_ENABLED === 'true';
   const isDevelopment = import.meta.env.DEV;
   
-  // Don't show ads in development or if no client ID
-  if (!clientId || isDevelopment) {
+  // Don't show ads in development or if not properly configured
+  if (!clientId || !adsenseEnabled || isDevelopment) {
     return (
       <div className={`ad-placeholder bg-gray-100 border-2 border-dashed border-gray-300 p-4 text-center text-gray-500 rounded-lg ${className}`}>
         <div className="flex items-center justify-center space-x-2">
           <div className="w-4 h-4 bg-gray-400 rounded"></div>
-          <span className="text-sm">Ad Space (Development Mode)</span>
+          <span className="text-sm">
+            {isDevelopment 
+              ? 'Ad Space (Development Mode)' 
+              : 'Ad Space (Configure AdSense)'
+            }
+          </span>
         </div>
       </div>
     );

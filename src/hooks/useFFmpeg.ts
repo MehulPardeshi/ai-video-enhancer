@@ -35,29 +35,32 @@ export function useFFmpeg() {
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Use working CDN URLs for production
+        // Use reliable CDN URLs for production - more reliable sources
         const cdnOptions = [
-          // Option 1: jsdelivr with confirmed working version
+          // Option 1: Direct jsdelivr with exact version
           {
-            name: 'jsdelivr (v0.12.10)',
-            baseURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd'
+            name: 'jsdelivr CDN',
+            coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
           },
-          // Option 2: unpkg with confirmed working version
+          // Option 2: unpkg with exact version
           {
-            name: 'unpkg (v0.12.10)',
-            baseURL: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd'
+            name: 'unpkg CDN',
+            coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
           },
-          // Option 3: jspm.dev with correct URL
+          // Option 3: Alternative CDN
           {
-            name: 'esm.sh',
-            baseURL: 'https://esm.sh/@ffmpeg/core@0.12.10/dist/umd'
+            name: 'jsDelivr Mirror',
+            coreURL: 'https://fastly.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://fastly.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
           }
         ];
         
         let lastError: Error | null = null;
         
         for (let i = 0; i < cdnOptions.length; i++) {
-          const { name, baseURL } = cdnOptions[i];
+          const { name, coreURL, wasmURL } = cdnOptions[i];
           
           try {
             console.log(`🔄 Trying CDN ${i + 1}/${cdnOptions.length}: ${name}`);
@@ -65,8 +68,8 @@ export function useFFmpeg() {
             
             // Reduced timeout to 30 seconds for faster fallback
             const loadPromise = ffmpegInstance.load({
-              coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-              wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+              coreURL: await toBlobURL(coreURL, 'text/javascript'),
+              wasmURL: await toBlobURL(wasmURL, 'application/wasm'),
             });
             
             const timeoutPromise = new Promise((_, reject) => 
