@@ -74,8 +74,82 @@ export function useFFmpeg() {
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Try loading strategies optimized for manual WebAssembly instantiation
+        // Try loading strategies optimized for cross-origin isolated environments
         const loadingStrategies = [
+          {
+            name: 'cors-friendly-esm',
+            timeout: 30000,
+            load: async () => {
+              console.log('🌐 Using CORS-friendly CDN (esm.sh with explicit CORS headers)...');
+              await ffmpegInstance.load({
+                coreURL: 'https://esm.sh/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://esm.sh/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+              });
+            }
+          },
+          {
+            name: 'skypack-cors-enabled',
+            timeout: 25000,
+            load: async () => {
+              console.log('📦 Using Skypack CDN (designed for cross-origin isolation)...');
+              await ffmpegInstance.load({
+                coreURL: 'https://cdn.skypack.dev/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://cdn.skypack.dev/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+              });
+            }
+          },
+          {
+            name: 'fetch-and-blob-conversion',
+            timeout: 35000,
+            load: async () => {
+              console.log('🔄 Fetching files with explicit CORS and converting to blob URLs...');
+              
+              const fetchWithCors = async (url: string, type: string) => {
+                const response = await fetch(url, {
+                  mode: 'cors',
+                  credentials: 'omit',
+                  headers: {
+                    'Accept': type === 'wasm' ? 'application/wasm' : 'application/javascript'
+                  }
+                });
+                
+                if (!response.ok) {
+                  throw new Error(`Failed to fetch ${url}: ${response.status}`);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const mimeType = type === 'wasm' ? 'application/wasm' : 'application/javascript';
+                const blob = new Blob([arrayBuffer], { type: mimeType });
+                return URL.createObjectURL(blob);
+              };
+              
+              const coreURL = await fetchWithCors(
+                'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                'js'
+              );
+              const wasmURL = await fetchWithCors(
+                'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm',
+                'wasm'
+              );
+              
+              await ffmpegInstance.load({ coreURL, wasmURL });
+              
+              // Cleanup blob URLs
+              URL.revokeObjectURL(coreURL);
+              URL.revokeObjectURL(wasmURL);
+            }
+          },
+          {
+            name: 'proxy-through-vercel',
+            timeout: 30000,
+            load: async () => {
+              console.log('🔀 Using Vercel proxy to bypass CORS (if configured)...');
+              await ffmpegInstance.load({
+                coreURL: '/api/proxy-ffmpeg?file=core.js',
+                wasmURL: '/api/proxy-ffmpeg?file=core.wasm'
+              });
+            }
+          },
           {
             name: 'extended-timeout-standard',
             timeout: 45000,
@@ -84,88 +158,6 @@ export function useFFmpeg() {
               await ffmpegInstance.load({
                 coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-              });
-            }
-          },
-          {
-            name: 'manual-wasm-loading',
-            timeout: 30000,
-            load: async () => {
-              console.log('📦 Using UMD build (avoiding ES module issues)...');
-              
-              // Try using a script tag approach for better compatibility
-              const script = document.createElement('script');
-              script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
-              script.crossOrigin = 'anonymous';
-              
-              await new Promise((resolve, reject) => {
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-              });
-              
-              // Wait for FFmpeg to be available globally
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              
-              console.log('📥 UMD FFmpeg loaded, initializing...');
-              
-              // Use the global FFmpeg object
-              if (window.FFmpeg) {
-                const { createFFmpeg } = window.FFmpeg;
-                const newInstance = createFFmpeg({ log: true });
-                await newInstance.load();
-                
-                // Replace our instance
-                Object.assign(ffmpegInstance, newInstance);
-              } else {
-                throw new Error('UMD FFmpeg not available');
-              }
-              
-              // Clean up
-              document.head.removeChild(script);
-            }
-          },
-          {
-            name: 'unpkg-primary',
-            timeout: 15000,
-            load: async () => {
-              console.log('🚀 Loading from unpkg (primary CDN)...');
-              await ffmpegInstance.load({
-                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-              });
-            }
-          },
-          {
-            name: 'jsdelivr-fallback',
-            timeout: 15000,
-            load: async () => {
-              console.log('🔄 Trying jsdelivr CDN fallback...');
-              await ffmpegInstance.load({
-                coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-              });
-            }
-          },
-          {
-            name: 'blob-conversion',
-            timeout: 20000,
-            load: async () => {
-              console.log('🔄 Trying blob URL conversion...');
-              await ffmpegInstance.load({
-                coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js', 'text/javascript'),
-                wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
-              });
-            }
-          },
-          {
-            name: 'older-stable-version',
-            timeout: 25000,
-            load: async () => {
-              console.log('🔄 Trying older stable version (0.12.2)...');
-              await ffmpegInstance.load({
-                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.wasm'
               });
             }
           },
@@ -181,13 +173,13 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'local-hosting',
-            timeout: 30000,
+            name: 'jsdelivr-fallback',
+            timeout: 15000,
             load: async () => {
-              console.log('🏠 Trying locally hosted files (if available)...');
+              console.log('🔄 Trying jsdelivr CDN fallback...');
               await ffmpegInstance.load({
-                coreURL: '/ffmpeg-core.js',
-                wasmURL: '/ffmpeg-core.wasm'
+                coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
               });
             }
           }
@@ -227,11 +219,20 @@ export function useFFmpeg() {
           // Provide specific error message based on the pattern
           const errorMessage = lastError?.message || lastError?.toString() || 'Unknown error';
           const isTimeoutIssue = errorMessage.includes('Timeout');
-          const isNetworkIssue = errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error');
+          const isCorsIssue = errorMessage.includes('CORS policy') || errorMessage.includes('Access-Control-Allow-Origin') || errorMessage.includes('cross-origin');
+          const isNetworkIssue = (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error')) && !isCorsIssue;
           const isWasmIssue = errorMessage.includes('WebAssembly') || errorMessage.includes('instantiate');
-          const isModuleIssue = errorMessage.includes('failed to import') || errorMessage.includes('module script');
+          const isModuleIssue = errorMessage.includes('failed to import') || errorMessage.includes('module script') || errorMessage.includes('MIME type');
           
-          if (isModuleIssue) {
+          if (isCorsIssue) {
+            console.error('🚫 CORS Policy Issue: Cross-origin isolation blocking CDN access');
+            console.log('💡 This indicates:');
+            console.log('  • Cross-origin isolated environment has strict CORS requirements');
+            console.log('  • CDNs need specific headers to work with COEP: credentialless');
+            console.log('  • Dynamic ES module imports are restricted in this context');
+            console.log('📋 Solution: Need to bundle FFmpeg or use CORS-enabled CDNs');
+            throw new Error('CORS policy blocks FFmpeg loading in cross-origin isolated environment');
+          } else if (isModuleIssue) {
             console.error('📦 Module Import Issue: FFmpeg core.js import failed');
             console.log('💡 This usually indicates:');
             console.log('  • ES module loading issues in cross-origin isolated environment');
