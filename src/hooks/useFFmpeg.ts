@@ -66,12 +66,13 @@ export function useFFmpeg() {
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Try multiple loading strategies
+        // Try faster loading strategies with shorter timeouts
         const loadingStrategies = [
           {
-            name: 'direct-unpkg',
+            name: 'quick-unpkg',
+            timeout: 8000,
             load: async () => {
-              console.log('🔄 Trying direct unpkg URLs...');
+              console.log('🚀 Quick load from unpkg (8s timeout)...');
               await ffmpegInstance.load({
                 coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
@@ -79,9 +80,10 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'direct-jsdelivr',
+            name: 'quick-jsdelivr',
+            timeout: 8000,
             load: async () => {
-              console.log('🔄 Trying direct jsdelivr URLs...');
+              console.log('🚀 Quick load from jsdelivr (8s timeout)...');
               await ffmpegInstance.load({
                 coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
@@ -89,9 +91,21 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'blob-unpkg',
+            name: 'older-version',
+            timeout: 10000,
             load: async () => {
-              console.log('🔄 Trying blob conversion with unpkg...');
+              console.log('🔄 Trying older stable version (0.12.2)...');
+              await ffmpegInstance.load({
+                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.wasm'
+              });
+            }
+          },
+          {
+            name: 'blob-conversion',
+            timeout: 12000,
+            load: async () => {
+              console.log('🔄 Trying blob conversion...');
               await ffmpegInstance.load({
                 coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js', 'text/javascript'),
                 wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
@@ -99,22 +113,22 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'esm-sh',
+            name: 'parallel-load',
+            timeout: 15000,
             load: async () => {
-              console.log('🔄 Trying esm.sh CDN...');
+              console.log('🔄 Trying parallel loading...');
+              const coreURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js';
+              const wasmURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm';
+              
+              // Pre-fetch both files
+              const [coreBlob, wasmBlob] = await Promise.all([
+                fetch(coreURL).then(r => r.blob()),
+                fetch(wasmURL).then(r => r.blob())
+              ]);
+              
               await ffmpegInstance.load({
-                coreURL: 'https://esm.sh/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://esm.sh/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-              });
-            }
-          },
-          {
-            name: 'latest-version',
-            load: async () => {
-              console.log('🔄 Trying latest FFmpeg version...');
-              await ffmpegInstance.load({
-                coreURL: 'https://unpkg.com/@ffmpeg/core@latest/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://unpkg.com/@ffmpeg/core@latest/dist/umd/ffmpeg-core.wasm'
+                coreURL: URL.createObjectURL(coreBlob),
+                wasmURL: URL.createObjectURL(wasmBlob)
               });
             }
           }
@@ -127,12 +141,12 @@ export function useFFmpeg() {
           if (loaded) break;
           
           try {
-            setLoadingProgress(30 + (loadingStrategies.indexOf(strategy) * 15));
+            setLoadingProgress(20 + (loadingStrategies.indexOf(strategy) * 15));
             
-            // Set a reasonable timeout for each attempt
+            // Use strategy-specific timeout
             const loadPromise = strategy.load();
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout after 20 seconds')), 20000)
+              setTimeout(() => reject(new Error(`Timeout after ${strategy.timeout/1000}s`)), strategy.timeout)
             );
             
             await Promise.race([loadPromise, timeoutPromise]);
@@ -146,7 +160,7 @@ export function useFFmpeg() {
             lastError = err;
             console.warn(`❌ ${strategy.name} failed:`, err);
             // Small delay before trying next strategy
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
         
@@ -159,6 +173,7 @@ export function useFFmpeg() {
         setError('FFmpeg loading failed');
         console.error('⚠️ FFmpeg loading failed:', err);
         console.log('💡 App will fall back to lightweight processing');
+        console.log('🌐 Network may be slow or CDN unavailable - this is normal');
       } finally {
         setIsLoading(false);
       }
