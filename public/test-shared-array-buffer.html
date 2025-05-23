@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SharedArrayBuffer Test</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff; 
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+        .pass { background: #2d5f2d; }
+        .fail { background: #5f2d2d; }
+        .info { background: #2d3d5f; }
+    </style>
+</head>
+<body>
+    <h1>🧪 SharedArrayBuffer Diagnostic Test</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+        
+        // Test 1: SharedArrayBuffer availability
+        addResult('=== SHARED ARRAY BUFFER TEST ===', 'info');
+        if (typeof SharedArrayBuffer !== 'undefined') {
+            addResult('✅ SharedArrayBuffer is available', 'pass');
+            
+            // Try to create one
+            try {
+                const sab = new SharedArrayBuffer(1024);
+                addResult('✅ Can create SharedArrayBuffer instance', 'pass');
+            } catch (e) {
+                addResult('❌ Cannot create SharedArrayBuffer: ' + e.message, 'fail');
+            }
+        } else {
+            addResult('❌ SharedArrayBuffer is NOT available', 'fail');
+        }
+        
+        // Test 2: Cross-origin isolation
+        addResult('=== CROSS-ORIGIN ISOLATION TEST ===', 'info');
+        if (typeof window.crossOriginIsolated !== 'undefined') {
+            if (window.crossOriginIsolated) {
+                addResult('✅ Page is cross-origin isolated', 'pass');
+            } else {
+                addResult('❌ Page is NOT cross-origin isolated', 'fail');
+            }
+        } else {
+            addResult('⚠️ crossOriginIsolated property not available', 'fail');
+        }
+        
+        // Test 3: Headers detection (via fetch)
+        addResult('=== HEADERS TEST ===', 'info');
+        fetch(window.location.href)
+            .then(response => {
+                const coep = response.headers.get('Cross-Origin-Embedder-Policy');
+                const coop = response.headers.get('Cross-Origin-Opener-Policy');
+                
+                if (coep) {
+                    addResult('✅ Cross-Origin-Embedder-Policy: ' + coep, 'pass');
+                } else {
+                    addResult('❌ Cross-Origin-Embedder-Policy header missing', 'fail');
+                }
+                
+                if (coop) {
+                    addResult('✅ Cross-Origin-Opener-Policy: ' + coop, 'pass');
+                } else {
+                    addResult('❌ Cross-Origin-Opener-Policy header missing', 'fail');
+                }
+            })
+            .catch(e => {
+                addResult('❌ Could not check headers: ' + e.message, 'fail');
+            });
+        
+        // Test 4: Browser info
+        addResult('=== BROWSER INFO ===', 'info');
+        addResult('User Agent: ' + navigator.userAgent, 'info');
+        addResult('Platform: ' + navigator.platform, 'info');
+        addResult('Hardware Concurrency: ' + (navigator.hardwareConcurrency || 'unknown'), 'info');
+        
+        // Test 5: Worker test
+        addResult('=== WEB WORKER TEST ===', 'info');
+        try {
+            const workerCode = `
+                self.postMessage('Worker started');
+                if (typeof SharedArrayBuffer !== 'undefined') {
+                    self.postMessage('SharedArrayBuffer available in worker');
+                } else {
+                    self.postMessage('SharedArrayBuffer NOT available in worker');
+                }
+            `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(blob));
+            
+            worker.onmessage = (e) => {
+                addResult('Worker: ' + e.data, e.data.includes('NOT') ? 'fail' : 'pass');
+            };
+            
+            worker.onerror = (e) => {
+                addResult('❌ Worker error: ' + e.message, 'fail');
+            };
+            
+            setTimeout(() => worker.terminate(), 3000);
+        } catch (e) {
+            addResult('❌ Cannot create worker: ' + e.message, 'fail');
+        }
+    </script>
+</body>
+</html> 
