@@ -35,75 +35,43 @@ export function useFFmpeg() {
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Use reliable CDN URLs for production - more reliable sources
-        const cdnOptions = [
-          // Option 1: Direct jsdelivr with exact version
-          {
-            name: 'jsdelivr CDN',
-            coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-            wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
-          },
-          // Option 2: unpkg with exact version
-          {
-            name: 'unpkg CDN',
-            coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-            wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
-          },
-          // Option 3: Alternative CDN
-          {
-            name: 'jsDelivr Mirror',
-            coreURL: 'https://fastly.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-            wasmURL: 'https://fastly.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
-          }
-        ];
+        // Simplified approach with most reliable CDN
+        console.log('🔄 Loading FFmpeg from jsdelivr CDN...');
+        setLoadingProgress(30);
         
-        let lastError: Error | null = null;
-        
-        for (let i = 0; i < cdnOptions.length; i++) {
-          const { name, coreURL, wasmURL } = cdnOptions[i];
+        try {
+          // Use the most reliable CDN configuration
+          await ffmpegInstance.load({
+            coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript'),
+            wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
+            workerURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.worker.js', 'text/javascript'),
+          });
           
-          try {
-            console.log(`🔄 Trying CDN ${i + 1}/${cdnOptions.length}: ${name}`);
-            setLoadingProgress(20 + (i * 25));
-            
-            // Reduced timeout to 30 seconds for faster fallback
-            const loadPromise = ffmpegInstance.load({
-              coreURL: await toBlobURL(coreURL, 'text/javascript'),
-              wasmURL: await toBlobURL(wasmURL, 'application/wasm'),
-            });
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Loading timeout (30s)')), 30000)
-            );
-            
-            await Promise.race([loadPromise, timeoutPromise]);
-            
-            setLoadingProgress(100);
-            setIsLoaded(true);
-            console.log(`✅ Video processor loaded successfully from ${name}!`);
-            return; // Success - exit the loop
-            
-          } catch (err) {
-            lastError = err instanceof Error ? err : new Error(String(err));
-            console.warn(`❌ CDN failed: ${name}`, err);
-            
-            // Continue to next CDN
-            setLoadingProgress(20 + (i * 25) + 10);
-            
-            // Small delay before trying next CDN
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+          setLoadingProgress(100);
+          setIsLoaded(true);
+          console.log('✅ Video processor loaded successfully!');
+          
+        } catch (coreError) {
+          console.warn('❌ Primary CDN failed, trying alternative...');
+          setLoadingProgress(50);
+          
+          // Fallback to older stable version
+          await ffmpegInstance.load({
+            coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js', 'text/javascript'),
+            wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
+          });
+          
+          setLoadingProgress(100);
+          setIsLoaded(true);
+          console.log('✅ Video processor loaded with fallback version!');
         }
-        
-        // If we get here, all CDNs failed
-        throw lastError || new Error('All CDN sources failed');
         
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        setError(`Failed to load video processor: ${errorMsg}`);
-        console.error('FFmpeg loading error:', err);
-        console.log('💡 This is normal - the app works without FFmpeg!');
-        console.log('💡 Try the "Lightweight Mode" for video processing');
+        setError(`Video processor unavailable: ${errorMsg}`);
+        console.warn('⚠️ FFmpeg failed to load - using fallback processing');
+        console.log('💡 This is normal - the app still works without FFmpeg!');
+        console.log('💡 Videos will be processed in "Lightweight Mode"');
       } finally {
         setIsLoading(false);
       }
@@ -111,7 +79,7 @@ export function useFFmpeg() {
     
     // Start loading immediately in production, skip in development
     if (!import.meta.env.DEV) {
-      const timer = setTimeout(load, 1000);
+      const timer = setTimeout(load, 2000); // Slight delay for better UX
       return () => clearTimeout(timer);
     } else {
       // In development, just set error state immediately
@@ -121,7 +89,7 @@ export function useFFmpeg() {
     // Cleanup
     return () => {
       if (ffmpeg) {
-        ffmpeg.terminate();
+        ffmpeg.terminate().catch(console.warn);
       }
     };
   }, []);
