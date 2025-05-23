@@ -9,6 +9,7 @@ declare global {
   }
 }
 
+// FFmpeg loader with CORS fixes - v2.1 (manual deployment trigger)
 export function useFFmpeg() {
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
