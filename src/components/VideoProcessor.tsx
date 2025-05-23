@@ -8,6 +8,7 @@ import { useFFmpeg } from '../hooks/useFFmpeg';
 import { useAIEnhancer } from '../hooks/useAIEnhancer';
 import AdUnit from './AdSense/AdUnit';
 
+// VideoProcessor with Canvas frame fix - v2.2
 interface VideoProcessorProps {
   videoFile: VideoFile;
   onReset: () => void;
