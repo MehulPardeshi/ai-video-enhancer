@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloudIcon, AlertCircleIcon } from 'lucide-react';
 import { VideoFile } from '../types/video';
+import SharedArrayBufferTest from './SharedArrayBufferTest';
 
 interface VideoUploaderProps {
   onVideoUpload: (file: VideoFile) => void;
@@ -52,6 +53,10 @@ const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUpload }) => {
   
   return (
     <div className="flex flex-col items-center">
+      <div className="w-full max-w-2xl mb-6">
+        <SharedArrayBufferTest />
+      </div>
+      
       <div
         {...getRootProps()}
         className={`w-full max-w-2xl p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer min-h-[300px] ${
