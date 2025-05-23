@@ -101,6 +101,17 @@ export function useFFmpeg() {
                 wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
               });
             }
+          },
+          {
+            name: 'local-hosting',
+            timeout: 30000,
+            load: async () => {
+              console.log('🏠 Trying locally hosted files (if available)...');
+              await ffmpegInstance.load({
+                coreURL: '/ffmpeg-core.js',
+                wasmURL: '/ffmpeg-core.wasm'
+              });
+            }
           }
         ];
         
@@ -135,7 +146,24 @@ export function useFFmpeg() {
         }
         
         if (!loaded) {
-          throw new Error(`All loading strategies failed. Last error: ${lastError?.message}`);
+          // Provide specific error message based on the pattern
+          const isTimeoutIssue = lastError?.message.includes('Timeout');
+          const isNetworkIssue = lastError?.message.includes('Failed to fetch') || lastError?.message.includes('Network Error');
+          
+          if (isTimeoutIssue) {
+            console.error('🌐 Network Issue: All CDNs are timing out');
+            console.log('💡 This usually indicates:');
+            console.log('  • Network/ISP blocking large file downloads');
+            console.log('  • Slow connection to CDN servers');
+            console.log('  • Corporate firewall restrictions');
+            console.log('📋 Diagnostic tools: /ffmpeg-debug.html');
+            throw new Error('CDN timeout detected - network may be restricting large downloads');
+          } else if (isNetworkIssue) {
+            console.error('❌ Network Issue: Cannot reach CDN servers');
+            throw new Error('Network connectivity issue - CDNs unreachable');
+          } else {
+            throw new Error(`All loading strategies failed. Last error: ${lastError?.message}`);
+          }
         }
         
       } catch (err) {

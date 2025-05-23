@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg.wasm Download Diagnostic</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff; 
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+        .pass { background: #2d5f2d; }
+        .fail { background: #5f2d2d; }
+        .info { background: #2d3d5f; }
+        .progress { background: #3d3d2d; }
+        .test-section {
+            border: 1px solid #444;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        button {
+            background: #4a5568;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5a6578;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 FFmpeg.wasm Download Diagnostic</h1>
+    
+    <div class="test-section">
+        <h2>Basic Environment</h2>
+        <div id="env-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Network Tests</h2>
+        <button onclick="testBasicFetch()">Test Basic Fetch</button>
+        <button onclick="testCDNAccess()">Test CDN Access</button>
+        <button onclick="testLargeFileDownload()">Test Large File Download</button>
+        <div id="network-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>FFmpeg.wasm File Tests</h2>
+        <button onclick="testFFmpegFiles()">Test FFmpeg File Downloads</button>
+        <button onclick="testWithProgress()">Test with Progress Tracking</button>
+        <div id="ffmpeg-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Browser Limitations</h2>
+        <button onclick="testMemoryLimits()">Test Memory Limits</button>
+        <button onclick="testConcurrentDownloads()">Test Concurrent Downloads</button>
+        <div id="browser-results"></div>
+    </div>
+    
+    <script>
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            container.appendChild(div);
+        }
+        
+        function addSpinner(containerId, message) {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = 'status progress';
+            div.innerHTML = `<span class="spinner"></span> ${message}`;
+            container.appendChild(div);
+            return div;
+        }
+        
+        // Environment check
+        function checkEnvironment() {
+            addResult('env-results', '=== ENVIRONMENT CHECK ===', 'info');
+            addResult('env-results', `User Agent: ${navigator.userAgent}`, 'info');
+            addResult('env-results', `Platform: ${navigator.platform}`, 'info');
+            addResult('env-results', `Hardware Concurrency: ${navigator.hardwareConcurrency || 'unknown'}`, 'info');
+            addResult('env-results', `Connection: ${navigator.connection?.effectiveType || 'unknown'}`, 'info');
+            addResult('env-results', `Memory: ${navigator.deviceMemory || 'unknown'} GB`, 'info');
+            
+            if (typeof SharedArrayBuffer !== 'undefined') {
+                addResult('env-results', '✅ SharedArrayBuffer available', 'pass');
+            } else {
+                addResult('env-results', '❌ SharedArrayBuffer NOT available', 'fail');
+            }
+            
+            if (window.crossOriginIsolated) {
+                addResult('env-results', '✅ Cross-origin isolated', 'pass');
+            } else {
+                addResult('env-results', '❌ NOT cross-origin isolated', 'fail');
+            }
+        }
+        
+        async function testBasicFetch() {
+            const spinner = addSpinner('network-results', 'Testing basic fetch to google.com...');
+            try {
+                const start = Date.now();
+                const response = await fetch('https://www.google.com', { 
+                    method: 'HEAD',
+                    mode: 'no-cors' 
+                });
+                const time = Date.now() - start;
+                spinner.remove();
+                addResult('network-results', `✅ Basic fetch working (${time}ms)`, 'pass');
+            } catch (error) {
+                spinner.remove();
+                addResult('network-results', `❌ Basic fetch failed: ${error.message}`, 'fail');
+            }
+        }
+        
+        async function testCDNAccess() {
+            const cdns = [
+                'https://unpkg.com/',
+                'https://cdn.jsdelivr.net/',
+                'https://cdnjs.cloudflare.com/'
+            ];
+            
+            for (const cdn of cdns) {
+                const spinner = addSpinner('network-results', `Testing access to ${cdn}...`);
+                try {
+                    const start = Date.now();
+                    const response = await fetch(cdn, { 
+                        method: 'HEAD',
+                        mode: 'cors'
+                    });
+                    const time = Date.now() - start;
+                    spinner.remove();
+                    addResult('network-results', `✅ ${cdn} accessible (${time}ms)`, 'pass');
+                } catch (error) {
+                    spinner.remove();
+                    addResult('network-results', `❌ ${cdn} failed: ${error.message}`, 'fail');
+                }
+            }
+        }
+        
+        async function testLargeFileDownload() {
+            const testUrl = 'https://unpkg.com/react@18.2.0/umd/react.production.min.js';
+            const spinner = addSpinner('network-results', 'Testing large file download...');
+            
+            try {
+                const start = Date.now();
+                const response = await fetch(testUrl);
+                const blob = await response.blob();
+                const time = Date.now() - start;
+                const size = (blob.size / 1024).toFixed(1);
+                
+                spinner.remove();
+                addResult('network-results', `✅ Large file download: ${size}KB in ${time}ms`, 'pass');
+            } catch (error) {
+                spinner.remove();
+                addResult('network-results', `❌ Large file download failed: ${error.message}`, 'fail');
+            }
+        }
+        
+        async function testFFmpegFiles() {
+            const files = [
+                {
+                    name: 'FFmpeg Core JS',
+                    url: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                    timeout: 15000
+                },
+                {
+                    name: 'FFmpeg Core WASM',
+                    url: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm',
+                    timeout: 20000
+                }
+            ];
+            
+            for (const file of files) {
+                const spinner = addSpinner('ffmpeg-results', `Downloading ${file.name}...`);
+                
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), file.timeout);
+                    
+                    const start = Date.now();
+                    const response = await fetch(file.url, {
+                        signal: controller.signal,
+                        mode: 'cors'
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const blob = await response.blob();
+                    const time = Date.now() - start;
+                    const size = (blob.size / 1024 / 1024).toFixed(2);
+                    
+                    spinner.remove();
+                    addResult('ffmpeg-results', `✅ ${file.name}: ${size}MB in ${time}ms`, 'pass');
+                    
+                } catch (error) {
+                    spinner.remove();
+                    if (error.name === 'AbortError') {
+                        addResult('ffmpeg-results', `❌ ${file.name}: Timeout after ${file.timeout/1000}s`, 'fail');
+                    } else {
+                        addResult('ffmpeg-results', `❌ ${file.name}: ${error.message}`, 'fail');
+                    }
+                }
+            }
+        }
+        
+        async function testWithProgress() {
+            const url = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm';
+            const spinner = addSpinner('ffmpeg-results', 'Testing with progress tracking...');
+            
+            try {
+                const response = await fetch(url);
+                const reader = response.body.getReader();
+                const contentLength = +response.headers.get('Content-Length');
+                
+                let receivedLength = 0;
+                const chunks = [];
+                
+                spinner.innerHTML = `<span class="spinner"></span> Downloading: 0%`;
+                
+                while(true) {
+                    const {done, value} = await reader.read();
+                    
+                    if (done) break;
+                    
+                    chunks.push(value);
+                    receivedLength += value.length;
+                    
+                    const progress = Math.round((receivedLength / contentLength) * 100);
+                    spinner.innerHTML = `<span class="spinner"></span> Downloading: ${progress}% (${(receivedLength/1024/1024).toFixed(1)}MB)`;
+                }
+                
+                spinner.remove();
+                addResult('ffmpeg-results', `✅ Progress tracking successful: ${(receivedLength/1024/1024).toFixed(2)}MB total`, 'pass');
+                
+            } catch (error) {
+                spinner.remove();
+                addResult('ffmpeg-results', `❌ Progress tracking failed: ${error.message}`, 'fail');
+            }
+        }
+        
+        async function testMemoryLimits() {
+            addResult('browser-results', '=== MEMORY TESTS ===', 'info');
+            
+            // Test memory allocation
+            try {
+                const size = 100 * 1024 * 1024; // 100MB
+                const buffer = new ArrayBuffer(size);
+                addResult('browser-results', '✅ Can allocate 100MB buffer', 'pass');
+            } catch (error) {
+                addResult('browser-results', `❌ Cannot allocate 100MB: ${error.message}`, 'fail');
+            }
+            
+            // Test SharedArrayBuffer creation
+            if (typeof SharedArrayBuffer !== 'undefined') {
+                try {
+                    const sab = new SharedArrayBuffer(1024 * 1024); // 1MB
+                    addResult('browser-results', '✅ Can create SharedArrayBuffer', 'pass');
+                } catch (error) {
+                    addResult('browser-results', `❌ Cannot create SharedArrayBuffer: ${error.message}`, 'fail');
+                }
+            }
+        }
+        
+        async function testConcurrentDownloads() {
+            const urls = [
+                'https://unpkg.com/react@18.2.0/package.json',
+                'https://cdn.jsdelivr.net/npm/vue@3.3.0/package.json',
+                'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js'
+            ];
+            
+            const spinner = addSpinner('browser-results', 'Testing concurrent downloads...');
+            
+            try {
+                const start = Date.now();
+                const promises = urls.map(url => fetch(url));
+                const responses = await Promise.all(promises);
+                const time = Date.now() - start;
+                
+                spinner.remove();
+                addResult('browser-results', `✅ Concurrent downloads successful (${time}ms)`, 'pass');
+            } catch (error) {
+                spinner.remove();
+                addResult('browser-results', `❌ Concurrent downloads failed: ${error.message}`, 'fail');
+            }
+        }
+        
+        // Auto-run environment check
+        checkEnvironment();
+    </script>
+</body>
+</html> 
