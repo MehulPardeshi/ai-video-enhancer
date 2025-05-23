@@ -24,11 +24,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Image data is required' });
     }
 
-    const apiKey = process.env.VITE_REPLICATE_API_TOKEN;
+    // Try multiple possible environment variable names
+    const apiKey = process.env.REPLICATE_API_TOKEN || 
+                   process.env.VITE_REPLICATE_API_TOKEN ||
+                   process.env.REPLICATE_API_KEY;
     
     if (!apiKey) {
-      return res.status(500).json({ error: 'API token not configured' });
+      console.error('❌ Replicate API token not found in environment variables');
+      console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('REPLICATE')));
+      return res.status(500).json({ 
+        error: 'API token not configured',
+        details: 'Replicate API token missing from environment variables'
+      });
     }
+
+    console.log('✅ Using Replicate API token:', apiKey.substring(0, 8) + '...');
 
     // Start prediction
     const prediction = await fetch('https://api.replicate.com/v1/predictions', {
@@ -48,10 +58,13 @@ export default async function handler(req, res) {
     });
 
     if (!prediction.ok) {
-      throw new Error(`Replicate API error: ${prediction.status}`);
+      const errorText = await prediction.text();
+      console.error('❌ Replicate API response:', prediction.status, errorText);
+      throw new Error(`Replicate API error: ${prediction.status} - ${errorText}`);
     }
 
     const predictionData = await prediction.json();
+    console.log('✅ Replicate prediction started:', predictionData.id);
     
     res.status(200).json(predictionData);
   } catch (error) {
