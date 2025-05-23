@@ -93,14 +93,8 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
       for (let i = 0; i < frames.length; i++) {
         const frame = frames[i];
         
-        // Create ImageData from frame buffer
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d')!;
-        const imageData = new ImageData(
-          new Uint8ClampedArray(frame.data),
-          canvas.width,
-          canvas.height
-        );
+        // Convert frame data to ImageData
+        const imageData = await convertFrameToImageData(frame);
         
         // Enhance frame
         const enhancedImageData = await enhanceFrame(imageData, enhancementScale);
@@ -119,6 +113,39 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
       console.error('Error processing video:', error);
       setIsExtractingFrames(false);
     }
+  };
+  
+  // Convert frame data to ImageData
+  const convertFrameToImageData = async (frame: any): Promise<ImageData> => {
+    return new Promise((resolve, reject) => {
+      const blob = new Blob([frame.data], { type: 'image/jpeg' });
+      const img = new Image();
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          reject(new Error('Canvas 2D context not available'));
+          return;
+        }
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        URL.revokeObjectURL(img.src); // Clean up
+        resolve(imageData);
+      };
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src); // Clean up
+        reject(new Error('Failed to load frame image'));
+      };
+      
+      img.src = URL.createObjectURL(blob);
+    });
   };
   
   // Lightweight processing mode (works without FFmpeg)
