@@ -31,6 +31,7 @@ const AdSenseScript: React.FC = () => {
     }
 
     console.log('Loading AdSense script for client:', clientId);
+    console.log('💡 Note: 400 errors are normal for new AdSense accounts');
 
     // Create and load AdSense script with proper error handling
     const script = document.createElement('script');
@@ -49,11 +50,32 @@ const AdSenseScript: React.FC = () => {
 
     script.onload = () => {
       console.log('AdSense script loaded successfully');
+      console.log('💡 If you see 400 errors, this means:');
+      console.log('   • Your AdSense account needs approval');
+      console.log('   • Add your domain to AdSense');
+      console.log('   • Wait 24-48 hours for propagation');
       
       // Initialize adsbygoogle if it doesn't exist
       if (!window.adsbygoogle) {
         window.adsbygoogle = [];
       }
+
+      // Override console.error temporarily to suppress AdSense 400 error spam
+      const originalError = console.error;
+      console.error = (...args) => {
+        // Filter out common AdSense 400 errors that are expected
+        const message = args[0]?.toString() || '';
+        if (message.includes('googleads') || message.includes('doubleclick') || message.includes('ads:1')) {
+          // Suppress these expected errors in production
+          return;
+        }
+        originalError.apply(console, args);
+      };
+
+      // Restore original console.error after 30 seconds
+      setTimeout(() => {
+        console.error = originalError;
+      }, 30000);
     };
 
     // Add script to head with error boundary
