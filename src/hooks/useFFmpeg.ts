@@ -67,8 +67,43 @@ export function useFFmpeg() {
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Try loading strategies optimized for credentialless COEP
+        // Try loading strategies optimized for manual WebAssembly instantiation
         const loadingStrategies = [
+          {
+            name: 'manual-wasm-loading',
+            timeout: 30000,
+            load: async () => {
+              console.log('🔧 Manual WebAssembly loading (bypassing FFmpeg loader)...');
+              
+              // Download files manually (we know this works from diagnostics)
+              const [coreResponse, wasmResponse] = await Promise.all([
+                fetch('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js'),
+                fetch('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm')
+              ]);
+              
+              if (!coreResponse.ok || !wasmResponse.ok) {
+                throw new Error('Failed to fetch files');
+              }
+              
+              // Create blob URLs
+              const coreBlob = await coreResponse.blob();
+              const wasmBlob = await wasmResponse.blob();
+              const coreURL = URL.createObjectURL(coreBlob);
+              const wasmURL = URL.createObjectURL(wasmBlob);
+              
+              console.log('📥 Files downloaded successfully, initializing FFmpeg...');
+              
+              // Use standard FFmpeg load with blob URLs
+              await ffmpegInstance.load({
+                coreURL,
+                wasmURL
+              });
+              
+              // Clean up blob URLs
+              URL.revokeObjectURL(coreURL);
+              URL.revokeObjectURL(wasmURL);
+            }
+          },
           {
             name: 'unpkg-primary',
             timeout: 15000,
@@ -99,6 +134,17 @@ export function useFFmpeg() {
               await ffmpegInstance.load({
                 coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js', 'text/javascript'),
                 wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
+              });
+            }
+          },
+          {
+            name: 'older-stable-version',
+            timeout: 25000,
+            load: async () => {
+              console.log('🔄 Trying older stable version (0.12.2)...');
+              await ffmpegInstance.load({
+                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.wasm'
               });
             }
           },
@@ -149,15 +195,23 @@ export function useFFmpeg() {
           // Provide specific error message based on the pattern
           const isTimeoutIssue = lastError?.message.includes('Timeout');
           const isNetworkIssue = lastError?.message.includes('Failed to fetch') || lastError?.message.includes('Network Error');
+          const isWasmIssue = lastError?.message.includes('WebAssembly') || lastError?.message.includes('instantiate');
           
-          if (isTimeoutIssue) {
-            console.error('🌐 Network Issue: All CDNs are timing out');
+          if (isWasmIssue) {
+            console.error('🔧 WebAssembly Issue: Failed to instantiate FFmpeg.wasm');
             console.log('💡 This usually indicates:');
-            console.log('  • Network/ISP blocking large file downloads');
-            console.log('  • Slow connection to CDN servers');
-            console.log('  • Corporate firewall restrictions');
+            console.log('  • WebAssembly instantiation timeout');
+            console.log('  • Insufficient memory for large WASM file');
+            console.log('  • Browser compatibility issue');
+            console.log('📋 Files download successfully, issue is in WASM processing');
+            throw new Error('WebAssembly instantiation failed - try refreshing or use Lightweight mode');
+          } else if (isTimeoutIssue) {
+            console.error('⏱️ Processing Timeout: FFmpeg initialization took too long');
+            console.log('💡 Based on diagnostics: Files download fine, but processing times out');
+            console.log('  • WebAssembly instantiation is slow');
+            console.log('  • Device may need more time for large WASM');
             console.log('📋 Diagnostic tools: /ffmpeg-debug.html');
-            throw new Error('CDN timeout detected - network may be restricting large downloads');
+            throw new Error('FFmpeg processing timeout - files download but initialization fails');
           } else if (isNetworkIssue) {
             console.error('❌ Network Issue: Cannot reach CDN servers');
             throw new Error('Network connectivity issue - CDNs unreachable');
