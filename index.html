@@ -7,6 +7,21 @@
     <title>AI Video Enhancer - Privacy-First Video Enhancement</title>
     <meta name="description" content="Enhance your videos with AI super-resolution in your browser - no login, no data storage, complete privacy." />
     
+    <!-- Cross-Origin Isolation for FFmpeg.wasm -->
+    <script>
+      if (typeof SharedArrayBuffer === 'undefined') {
+        console.log('🔧 Enabling cross-origin isolation for FFmpeg.wasm...');
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/coi-serviceworker@0.1.7/coi-serviceworker.min.js';
+        script.onload = () => {
+          console.log('✅ Cross-origin isolation helper loaded');
+        };
+        document.head.appendChild(script);
+      } else {
+        console.log('✅ SharedArrayBuffer already available');
+      }
+    </script>
+    
     <!-- Google AdSense Verification Code -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5920500419421499" crossorigin="anonymous"></script>
   </head>

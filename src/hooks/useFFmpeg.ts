@@ -9,6 +9,23 @@ export function useFFmpeg() {
   const [error, setError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   
+  // Check SharedArrayBuffer availability
+  const checkSharedArrayBuffer = () => {
+    try {
+      if (typeof SharedArrayBuffer === 'undefined') {
+        console.log('❌ SharedArrayBuffer not available');
+        console.log('🔍 Cross-origin isolation required for FFmpeg.wasm');
+        console.log('🛠️ Headers needed: Cross-Origin-Embedder-Policy: require-corp, Cross-Origin-Opener-Policy: same-origin');
+        return false;
+      }
+      console.log('✅ SharedArrayBuffer available');
+      return true;
+    } catch (e) {
+      console.log('❌ SharedArrayBuffer check failed:', e);
+      return false;
+    }
+  };
+  
   // Initialize FFmpeg
   useEffect(() => {
     const load = async () => {
@@ -23,12 +40,26 @@ export function useFFmpeg() {
         return;
       }
       
+      // Check SharedArrayBuffer availability first
+      if (!checkSharedArrayBuffer()) {
+        console.log('⏳ Waiting for cross-origin isolation to be enabled...');
+        // Wait a bit for the serviceworker to potentially kick in
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        if (!checkSharedArrayBuffer()) {
+          setError('SharedArrayBuffer not available - cross-origin isolation required');
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       try {
         setIsLoading(true);
         setError(null);
         setLoadingProgress(0);
         
         console.log('🎬 Loading video processor (FFmpeg.wasm)...');
+        console.log('🌐 Cross-origin isolated:', window.crossOriginIsolated ?? 'unknown');
         
         // Create a new instance
         const ffmpegInstance = new FFmpeg();
