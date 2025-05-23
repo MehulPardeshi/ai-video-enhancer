@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
+// TypeScript declarations for global FFmpeg
+declare global {
+  interface Window {
+    FFmpeg?: any;
+  }
+}
+
 export function useFFmpeg() {
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -70,38 +77,52 @@ export function useFFmpeg() {
         // Try loading strategies optimized for manual WebAssembly instantiation
         const loadingStrategies = [
           {
+            name: 'extended-timeout-standard',
+            timeout: 45000,
+            load: async () => {
+              console.log('⏰ Standard loading with extended timeout (45s)...');
+              await ffmpegInstance.load({
+                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+              });
+            }
+          },
+          {
             name: 'manual-wasm-loading',
             timeout: 30000,
             load: async () => {
-              console.log('🔧 Manual WebAssembly loading (bypassing FFmpeg loader)...');
+              console.log('📦 Using UMD build (avoiding ES module issues)...');
               
-              // Download files manually (we know this works from diagnostics)
-              const [coreResponse, wasmResponse] = await Promise.all([
-                fetch('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js'),
-                fetch('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm')
-              ]);
+              // Try using a script tag approach for better compatibility
+              const script = document.createElement('script');
+              script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
+              script.crossOrigin = 'anonymous';
               
-              if (!coreResponse.ok || !wasmResponse.ok) {
-                throw new Error('Failed to fetch files');
-              }
-              
-              // Create blob URLs
-              const coreBlob = await coreResponse.blob();
-              const wasmBlob = await wasmResponse.blob();
-              const coreURL = URL.createObjectURL(coreBlob);
-              const wasmURL = URL.createObjectURL(wasmBlob);
-              
-              console.log('📥 Files downloaded successfully, initializing FFmpeg...');
-              
-              // Use standard FFmpeg load with blob URLs
-              await ffmpegInstance.load({
-                coreURL,
-                wasmURL
+              await new Promise((resolve, reject) => {
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
               });
               
-              // Clean up blob URLs
-              URL.revokeObjectURL(coreURL);
-              URL.revokeObjectURL(wasmURL);
+              // Wait for FFmpeg to be available globally
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              console.log('📥 UMD FFmpeg loaded, initializing...');
+              
+              // Use the global FFmpeg object
+              if (window.FFmpeg) {
+                const { createFFmpeg } = window.FFmpeg;
+                const newInstance = createFFmpeg({ log: true });
+                await newInstance.load();
+                
+                // Replace our instance
+                Object.assign(ffmpegInstance, newInstance);
+              } else {
+                throw new Error('UMD FFmpeg not available');
+              }
+              
+              // Clean up
+              document.head.removeChild(script);
             }
           },
           {
@@ -145,6 +166,17 @@ export function useFFmpeg() {
               await ffmpegInstance.load({
                 coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.wasm'
+              });
+            }
+          },
+          {
+            name: 'legacy-version',
+            timeout: 30000,
+            load: async () => {
+              console.log('🕰️ Trying legacy version (0.11.6) with better cross-origin support...');
+              await ffmpegInstance.load({
+                coreURL: 'https://unpkg.com/@ffmpeg/core@0.11.6/dist/ffmpeg-core.js',
+                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.11.6/dist/ffmpeg-core.wasm'
               });
             }
           },
@@ -193,11 +225,21 @@ export function useFFmpeg() {
         
         if (!loaded) {
           // Provide specific error message based on the pattern
-          const isTimeoutIssue = lastError?.message.includes('Timeout');
-          const isNetworkIssue = lastError?.message.includes('Failed to fetch') || lastError?.message.includes('Network Error');
-          const isWasmIssue = lastError?.message.includes('WebAssembly') || lastError?.message.includes('instantiate');
+          const errorMessage = lastError?.message || lastError?.toString() || 'Unknown error';
+          const isTimeoutIssue = errorMessage.includes('Timeout');
+          const isNetworkIssue = errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error');
+          const isWasmIssue = errorMessage.includes('WebAssembly') || errorMessage.includes('instantiate');
+          const isModuleIssue = errorMessage.includes('failed to import') || errorMessage.includes('module script');
           
-          if (isWasmIssue) {
+          if (isModuleIssue) {
+            console.error('📦 Module Import Issue: FFmpeg core.js import failed');
+            console.log('💡 This usually indicates:');
+            console.log('  • ES module loading issues in cross-origin isolated environment');
+            console.log('  • Content Security Policy restrictions');
+            console.log('  • MIME type or module format compatibility issues');
+            console.log('📋 Files download successfully, issue is in JavaScript module loading');
+            throw new Error('FFmpeg module import failed - cross-origin isolation may affect module loading');
+          } else if (isWasmIssue) {
             console.error('🔧 WebAssembly Issue: Failed to instantiate FFmpeg.wasm');
             console.log('💡 This usually indicates:');
             console.log('  • WebAssembly instantiation timeout');
@@ -216,7 +258,7 @@ export function useFFmpeg() {
             console.error('❌ Network Issue: Cannot reach CDN servers');
             throw new Error('Network connectivity issue - CDNs unreachable');
           } else {
-            throw new Error(`All loading strategies failed. Last error: ${lastError?.message}`);
+            throw new Error(`All loading strategies failed. Last error: ${errorMessage}`);
           }
         }
         
