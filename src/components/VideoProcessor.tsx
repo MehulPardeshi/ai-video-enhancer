@@ -56,6 +56,11 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
     }
   }, [isModelLoading, downloadProgress]);
   
+  // Force reload FFmpeg
+  const retryFFmpegLoad = () => {
+    window.location.reload();
+  };
+  
   // Toggle play/pause
   const togglePlay = () => {
     if (videoRef.current) {
@@ -70,7 +75,10 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
   
   // Handle video processing
   const handleProcess = async () => {
-    if (!isFFmpegLoaded || !aiModel) return;
+    if (!isFFmpegLoaded || !aiModel) {
+      console.warn('Prerequisites not met:', { isFFmpegLoaded, aiModel: !!aiModel });
+      return;
+    }
     
     startProcessing();
     setIsExtractingFrames(true);
@@ -325,43 +333,59 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Primary action - Lightweight mode first in development */}
-              {ffmpegError && aiModel && !processingStarted ? (
+              {/* Show different buttons based on FFmpeg status */}
+              {isFFmpegLoaded && aiModel && !processingStarted ? (
                 <>
+                  {/* Primary Advanced Mode button when FFmpeg is loaded */}
+                  <button
+                    onClick={handleProcess}
+                    className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Zap className="w-5 h-5" />
+                    🚀 Advanced Mode (Full FFmpeg)
+                  </button>
+                  
+                  {/* Secondary Lightweight mode button */}
+                  <button
+                    onClick={handleLightweightProcess}
+                    className="w-full py-2 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <WandIcon className="w-4 h-4" />
+                    ⚡ Lightweight Mode
+                  </button>
+                </>
+              ) : ffmpegError && aiModel && !processingStarted ? (
+                <>
+                  {/* Primary Lightweight mode when FFmpeg failed */}
                   <button
                     onClick={handleLightweightProcess}
                     className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white transition-colors flex items-center justify-center gap-2"
                   >
                     <WandIcon className="w-5 h-5" />
-                    Enhance Video (Lightweight)
+                    ⚡ Enhance Video (Lightweight)
                   </button>
                   
-                  {/* Secondary button for full FFmpeg mode */}
+                  {/* Secondary retry button for Advanced Mode */}
                   <button
-                    onClick={handleProcess}
-                    disabled={true}
-                    className="w-full py-2 px-4 rounded-lg font-medium bg-gray-700 text-gray-400 cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                    onClick={retryFFmpegLoad}
+                    className="w-full py-2 px-4 rounded-lg font-medium bg-purple-700 hover:bg-purple-600 text-white transition-colors flex items-center justify-center gap-2 text-sm"
                   >
-                    {import.meta.env.DEV ? (
-                      <>⚙️ Full FFmpeg Mode (Production Only)</>
-                    ) : (
-                      <>⚡ Advanced Mode (Lightweight works great!)</>
-                    )}
+                    🔄 Try Advanced Mode
                   </button>
                 </>
               ) : (
                 <button
-                  onClick={handleProcess}
-                  disabled={processingStarted || isFFmpegLoading || !isFFmpegLoaded || isModelLoading || ffmpegError || modelError}
+                  onClick={isFFmpegLoaded ? handleProcess : handleLightweightProcess}
+                  disabled={processingStarted || isFFmpegLoading || isModelLoading || modelError || (!isFFmpegLoaded && !ffmpegError)}
                   className={`w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
-                    processingStarted || isFFmpegLoading || !isFFmpegLoaded || isModelLoading || ffmpegError || modelError
+                    processingStarted || isFFmpegLoading || isModelLoading || modelError || (!isFFmpegLoaded && !ffmpegError)
                       ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400'
+                      : isFFmpegLoaded
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400'
+                      : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400'
                   }`}
                 >
-                  {ffmpegError ? (
-                    <>🎯 Use Lightweight Mode</>
-                  ) : modelError ? (
+                  {modelError ? (
                     <>❌ AI model failed to load</>
                   ) : isFFmpegLoading ? (
                     <>
@@ -373,17 +397,22 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       Loading AI model... {downloadProgress}%
                     </>
-                  ) : !isFFmpegLoaded ? (
+                  ) : !isFFmpegLoaded && !ffmpegError ? (
                     <>⏳ Waiting for video processor...</>
                   ) : processingStarted ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                       Processing...
                     </>
-                  ) : (
+                  ) : isFFmpegLoaded ? (
                     <>
                       <Zap className="w-5 h-5" />
-                      Enhance Video
+                      🚀 Advanced Mode
+                    </>
+                  ) : (
+                    <>
+                      <WandIcon className="w-5 h-5" />
+                      ⚡ Lightweight Mode
                     </>
                   )}
                 </button>
@@ -391,24 +420,38 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
             </div>
           )}
           
-          {/* Error recovery options - outside of main button */}
+          {/* FFmpeg status indicators */}
           {ffmpegError && !import.meta.env.DEV && (
-            <div className="text-center space-y-2 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
-              <p className="text-sm text-blue-400">🎯 Using Lightweight Processing Mode</p>
+            <div className="text-center space-y-3 p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/50 rounded-lg">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                <p className="text-sm text-blue-400 font-medium">Lightweight Processing Active</p>
+              </div>
               <p className="text-xs text-gray-300">
-                Your videos will be enhanced using AI fallback processing. 
-                This works just as well for most videos!
+                Advanced mode temporarily unavailable. Lightweight mode provides excellent results!
               </p>
-              <div className="flex justify-center gap-4 text-xs mt-2">
+              <div className="flex justify-center gap-4 text-xs">
                 <button 
-                  onClick={() => window.location.reload()} 
-                  className="text-blue-400 hover:text-blue-300 underline"
+                  onClick={retryFFmpegLoad} 
+                  className="text-purple-400 hover:text-purple-300 underline"
                 >
-                  Try full mode again
+                  🔄 Retry Advanced Mode
                 </button>
                 <span className="text-gray-400">•</span>
-                <span className="text-gray-400">Works perfectly without it</span>
+                <span className="text-gray-400">Lightweight works great</span>
               </div>
+            </div>
+          )}
+          
+          {isFFmpegLoaded && !import.meta.env.DEV && (
+            <div className="text-center space-y-2 p-3 bg-gradient-to-r from-purple-900/20 to-blue-900/20 border border-purple-500/50 rounded-lg">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                <p className="text-sm text-purple-400 font-medium">🚀 Advanced Mode Ready</p>
+              </div>
+              <p className="text-xs text-gray-300">
+                Full FFmpeg.wasm loaded! You can now use frame-by-frame processing for maximum quality.
+              </p>
             </div>
           )}
           
