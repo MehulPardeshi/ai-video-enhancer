@@ -15,7 +15,7 @@ export function useFFmpeg() {
       if (typeof SharedArrayBuffer === 'undefined') {
         console.log('❌ SharedArrayBuffer not available');
         console.log('🔍 Cross-origin isolation required for FFmpeg.wasm');
-        console.log('🛠️ Headers needed: Cross-Origin-Embedder-Policy: require-corp, Cross-Origin-Opener-Policy: same-origin');
+        console.log('🛠️ Headers needed: Cross-Origin-Embedder-Policy: credentialless, Cross-Origin-Opener-Policy: same-origin');
         return false;
       }
       console.log('✅ SharedArrayBuffer available');
@@ -60,19 +60,20 @@ export function useFFmpeg() {
         
         console.log('🎬 Loading video processor (FFmpeg.wasm)...');
         console.log('🌐 Cross-origin isolated:', window.crossOriginIsolated ?? 'unknown');
+        console.log('🔧 COEP Policy: credentialless (more compatible than require-corp)');
         
         // Create a new instance
         const ffmpegInstance = new FFmpeg();
         setFfmpeg(ffmpegInstance);
         setLoadingProgress(10);
         
-        // Try faster loading strategies with shorter timeouts
+        // Try loading strategies optimized for credentialless COEP
         const loadingStrategies = [
           {
-            name: 'quick-unpkg',
-            timeout: 8000,
+            name: 'unpkg-primary',
+            timeout: 15000,
             load: async () => {
-              console.log('🚀 Quick load from unpkg (8s timeout)...');
+              console.log('🚀 Loading from unpkg (primary CDN)...');
               await ffmpegInstance.load({
                 coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
@@ -80,10 +81,10 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'quick-jsdelivr',
-            timeout: 8000,
+            name: 'jsdelivr-fallback',
+            timeout: 15000,
             load: async () => {
-              console.log('🚀 Quick load from jsdelivr (8s timeout)...');
+              console.log('🔄 Trying jsdelivr CDN fallback...');
               await ffmpegInstance.load({
                 coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
                 wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
@@ -91,44 +92,13 @@ export function useFFmpeg() {
             }
           },
           {
-            name: 'older-version',
-            timeout: 10000,
-            load: async () => {
-              console.log('🔄 Trying older stable version (0.12.2)...');
-              await ffmpegInstance.load({
-                coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.js',
-                wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/umd/ffmpeg-core.wasm'
-              });
-            }
-          },
-          {
             name: 'blob-conversion',
-            timeout: 12000,
+            timeout: 20000,
             load: async () => {
-              console.log('🔄 Trying blob conversion...');
+              console.log('🔄 Trying blob URL conversion...');
               await ffmpegInstance.load({
                 coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js', 'text/javascript'),
                 wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
-              });
-            }
-          },
-          {
-            name: 'parallel-load',
-            timeout: 15000,
-            load: async () => {
-              console.log('🔄 Trying parallel loading...');
-              const coreURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js';
-              const wasmURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm';
-              
-              // Pre-fetch both files
-              const [coreBlob, wasmBlob] = await Promise.all([
-                fetch(coreURL).then(r => r.blob()),
-                fetch(wasmURL).then(r => r.blob())
-              ]);
-              
-              await ffmpegInstance.load({
-                coreURL: URL.createObjectURL(coreBlob),
-                wasmURL: URL.createObjectURL(wasmBlob)
               });
             }
           }
