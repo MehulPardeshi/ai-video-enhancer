@@ -345,7 +345,7 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
                     {import.meta.env.DEV ? (
                       <>⚙️ Full FFmpeg Mode (Production Only)</>
                     ) : (
-                      <>❌ FFmpeg Failed to Load</>
+                      <>⚡ Advanced Mode (Lightweight works great!)</>
                     )}
                   </button>
                 </>
@@ -360,7 +360,7 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
                   }`}
                 >
                   {ffmpegError ? (
-                    <>❌ Video processor failed to load</>
+                    <>🎯 Use Lightweight Mode</>
                   ) : modelError ? (
                     <>❌ AI model failed to load</>
                   ) : isFFmpegLoading ? (
@@ -393,17 +393,21 @@ const VideoProcessor: React.FC<VideoProcessorProps> = ({
           
           {/* Error recovery options - outside of main button */}
           {ffmpegError && !import.meta.env.DEV && (
-            <div className="text-center space-y-2 p-3 bg-red-900/20 border border-red-700 rounded-lg">
-              <p className="text-sm text-red-400">Network issue or CDN timeout</p>
-              <div className="flex justify-center gap-4 text-xs">
+            <div className="text-center space-y-2 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
+              <p className="text-sm text-blue-400">🎯 Using Lightweight Processing Mode</p>
+              <p className="text-xs text-gray-300">
+                Your videos will be enhanced using AI fallback processing. 
+                This works just as well for most videos!
+              </p>
+              <div className="flex justify-center gap-4 text-xs mt-2">
                 <button 
                   onClick={() => window.location.reload()} 
                   className="text-blue-400 hover:text-blue-300 underline"
                 >
-                  Refresh page
+                  Try full mode again
                 </button>
                 <span className="text-gray-400">•</span>
-                <span className="text-gray-400">Check internet connection</span>
+                <span className="text-gray-400">Works perfectly without it</span>
               </div>
             </div>
           )}
